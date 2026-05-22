@@ -1,0 +1,2151 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: events
+    description: Event operations
+  - name: tiers
+    description: Ticket tier operations
+  - name: checkout
+    description: Checkout and order operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: authRegister
+      tags: [auth]
+      summary: Register a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered and logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "400":
+          description: Validation error or email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: authLogin
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags: [auth]
+      summary: End session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: authMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List published events
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search by title
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+        - name: startAfter
+          in: query
+          schema:
+            type: string
+          description: Filter events starting after this ISO date
+        - name: startBefore
+          in: query
+          schema:
+            type: string
+          description: Filter events starting before this ISO date
+        - name: priceFilter
+          in: query
+          schema:
+            type: string
+            enum: [any, free, paid]
+          description: Filter by price
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [startAt, createdAt]
+          description: Sort field
+      responses:
+        "200":
+          description: List of published events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create a new event (organiser only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "201":
+          description: Created event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/staff:
+    get:
+      operationId: listMyStaffEvents
+      tags: [events]
+      summary: List events where the current user is assigned as staff
+      responses:
+        "200":
+          description: Staff-assigned events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/mine:
+    get:
+      operationId: listMyEvents
+      tags: [events]
+      summary: List organiser's own events (all statuses)
+      responses:
+        "200":
+          description: Organiser's events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{slug}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      summary: Get a published event by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Event detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/edit:
+    patch:
+      operationId: updateEvent
+      tags: [events]
+      summary: Update an event (organiser must own it)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventUpdate"
+      responses:
+        "200":
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/publish:
+    post:
+      operationId: publishEvent
+      tags: [events]
+      summary: Publish an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Published event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/cancel:
+    post:
+      operationId: cancelEvent
+      tags: [events]
+      summary: Cancel an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancelled event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/tiers:
+    get:
+      operationId: listEventTiers
+      tags: [tiers]
+      summary: List ticket tiers for an event (public)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ticket tiers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TicketTier"
+        "404":
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createEventTier
+      tags: [tiers]
+      summary: Add a ticket tier to an event (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketTierInput"
+      responses:
+        "201":
+          description: Created tier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketTier"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tiers/{id}:
+    patch:
+      operationId: updateTier
+      tags: [tiers]
+      summary: Update a ticket tier (organiser must own event)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketTierUpdate"
+      responses:
+        "200":
+          description: Updated tier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketTier"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTier
+      tags: [tiers]
+      summary: Delete a ticket tier (organiser must own event, rejected if sold > 0)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Cannot delete tier with sold tickets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/orders:
+    get:
+      operationId: listEventOrders
+      tags: [events]
+      summary: List orders (with tickets) for an event — organiser only
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Orders with tickets and aggregate stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventOrdersResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /organiser/stats:
+    get:
+      operationId: getOrganiserStats
+      tags: [events]
+      summary: Aggregate stats for the logged-in organiser's dashboard
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganiserStats"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checkout:
+    post:
+      operationId: checkout
+      tags: [checkout]
+      summary: Create an order and initiate checkout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutInput"
+      responses:
+        "200":
+          description: Checkout result (Stripe URL or free order confirmation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Event or tier not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Not enough tickets available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [checkout]
+      summary: Get order details by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order details with tickets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "404":
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tickets/{qrToken}:
+    get:
+      operationId: getTicket
+      tags: [checkout]
+      summary: Get ticket by QR token
+      parameters:
+        - name: qrToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ticket detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketDetail"
+        "404":
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tickets/{qrToken}/checkin:
+    post:
+      operationId: checkinTicket
+      tags: [checkout]
+      summary: Check in a ticket at the door (organiser or staff)
+      parameters:
+        - name: qrToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Check-in result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckinResult"
+        "400":
+          description: Already checked in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/profile:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update logged-in user's name and email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/clone:
+    post:
+      operationId: cloneEvent
+      tags: [events]
+      summary: Clone an event (as draft)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Cloned event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/staff:
+    get:
+      operationId: listEventStaff
+      tags: [events]
+      summary: List staff assigned to this event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventStaffMember"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: assignEventStaff
+      tags: [events]
+      summary: Assign an existing user as staff (by email)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignStaffInput"
+      responses:
+        "201":
+          description: Staff assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventStaffMember"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No user found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/staff/{userId}:
+    delete:
+      operationId: removeEventStaff
+      tags: [events]
+      summary: Remove a staff assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /events/{id}/tier-stats:
+    get:
+      operationId: getEventTierStats
+      tags: [events]
+      summary: Per-tier sold + revenue + check-in counts (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tier stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TierStat"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tickets/{qrToken}/uncheckin:
+    post:
+      operationId: uncheckinTicket
+      tags: [checkout]
+      summary: Undo a check-in (organiser or staff)
+      parameters:
+        - name: qrToken
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reverted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /find-tickets-by-email:
+    get:
+      operationId: findTicketsByEmail
+      tags: [checkout]
+      summary: Public — find paid tickets by buyer email
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FindTicketsOrder"
+
+  /my-tickets:
+    get:
+      operationId: getMyTickets
+      tags: [checkout]
+      summary: Get all tickets for the logged-in attendee (matched by email)
+      responses:
+        "200":
+          description: List of attendee tickets grouped by order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MyTicketOrder"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /events/{id}/promo-codes:
+    get:
+      operationId: listEventPromoCodes
+      tags: [events]
+      summary: List promo codes for an event (organiser)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of promo codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromoCode"
+    post:
+      operationId: createPromoCode
+      tags: [events]
+      summary: Create a promo code for an event (organiser)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoCodeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCode"
+
+  /events/{id}/promo-codes/{codeId}:
+    delete:
+      operationId: deletePromoCode
+      tags: [events]
+      summary: Delete a promo code (organiser)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: codeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /events/{id}/promo-codes/validate:
+    post:
+      operationId: validatePromoCode
+      tags: [events]
+      summary: Validate a promo code (public)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoCodeValidateInput"
+      responses:
+        "200":
+          description: Discount info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCodeValidateResult"
+
+  /tiers/{tierId}/waitlist:
+    post:
+      operationId: joinWaitlist
+      tags: [tiers]
+      summary: Join the waitlist for a sold-out tier (public)
+      parameters:
+        - name: tierId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaitlistInput"
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /events/{id}/waitlist:
+    get:
+      operationId: getEventWaitlist
+      tags: [events]
+      summary: Get waitlist entries for an event (organiser)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Waitlist entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WaitlistEntry"
+
+  /events/{id}/speakers:
+    get:
+      operationId: listEventSpeakers
+      tags: [events]
+      summary: List speakers for an event (public)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Speakers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventSpeaker"
+    post:
+      operationId: createEventSpeaker
+      tags: [events]
+      summary: Add a speaker to an event (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSpeakerInput"
+      responses:
+        "201":
+          description: Created speaker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSpeaker"
+
+  /events/{id}/speakers/{speakerId}:
+    patch:
+      operationId: updateEventSpeaker
+      tags: [events]
+      summary: Update a speaker (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: speakerId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSpeakerInput"
+      responses:
+        "200":
+          description: Updated speaker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSpeaker"
+    delete:
+      operationId: deleteEventSpeaker
+      tags: [events]
+      summary: Delete a speaker (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: speakerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /events/{id}/sessions:
+    get:
+      operationId: listEventSessions
+      tags: [events]
+      summary: List sessions for an event (public)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventSession"
+    post:
+      operationId: createEventSession
+      tags: [events]
+      summary: Add a session to an event (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSessionInput"
+      responses:
+        "201":
+          description: Created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSession"
+
+  /events/{id}/sessions/{sessionId}:
+    patch:
+      operationId: updateEventSession
+      tags: [events]
+      summary: Update a session (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSessionInput"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSession"
+    delete:
+      operationId: deleteEventSession
+      tags: [events]
+      summary: Delete a session (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /events/{id}/announcements:
+    get:
+      operationId: listEventAnnouncements
+      tags: [events]
+      summary: List sent announcements for an event (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sent announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventAnnouncement"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: sendEventAnnouncement
+      tags: [events]
+      summary: Send an announcement email to all paid attendees (organiser only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendAnnouncementInput"
+      responses:
+        "201":
+          description: Announcement sent and logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventAnnouncement"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    AuthUser:
+      type: object
+      required: [id, email, name, role, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [organiser, attendee, staff, admin]
+        createdAt:
+          type: string
+
+    RegisterInput:
+      type: object
+      required: [email, password, name, termsAccepted]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          enum: [attendee, organiser]
+        termsAccepted:
+          type: boolean
+          enum: [true]
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    Event:
+      type: object
+      required:
+        - id
+        - organiserId
+        - organiserName
+        - slug
+        - title
+        - startAt
+        - endAt
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        organiserId:
+          type: string
+        organiserName:
+          type: string
+        slug:
+          type: string
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        startAt:
+          type: string
+        endAt:
+          type: string
+        venueName:
+          type: ["string", "null"]
+        venueAddress:
+          type: ["string", "null"]
+        virtualUrl:
+          type: ["string", "null"]
+        capacity:
+          type: ["integer", "null"]
+        bannerUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, published, cancelled, completed]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    EventInput:
+      type: object
+      required: [title, startAt, endAt]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        category:
+          type: string
+        startAt:
+          type: string
+        endAt:
+          type: string
+        venueName:
+          type: string
+        venueAddress:
+          type: string
+        virtualUrl:
+          type: string
+        capacity:
+          type: integer
+
+    EventUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        category:
+          type: string
+        startAt:
+          type: string
+        endAt:
+          type: string
+        venueName:
+          type: string
+        venueAddress:
+          type: string
+        virtualUrl:
+          type: string
+        capacity:
+          type: integer
+
+    TicketTier:
+      type: object
+      required: [id, eventId, name, priceCents, sold, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        name:
+          type: string
+        priceCents:
+          type: integer
+        quantity:
+          type: ["integer", "null"]
+        sold:
+          type: integer
+        saleStartsAt:
+          type: ["string", "null"]
+        saleEndsAt:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    TicketTierInput:
+      type: object
+      required: [name, priceCents]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        priceCents:
+          type: integer
+          minimum: 0
+        quantity:
+          type: integer
+          minimum: 1
+        saleStartsAt:
+          type: string
+        saleEndsAt:
+          type: string
+        sortOrder:
+          type: integer
+
+    TicketTierUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        priceCents:
+          type: integer
+          minimum: 0
+        quantity:
+          type: integer
+          minimum: 1
+        saleStartsAt:
+          type: string
+        saleEndsAt:
+          type: string
+        sortOrder:
+          type: integer
+
+    AttendeeInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    TierLineInput:
+      type: object
+      required: [tierId, quantity, attendees]
+      properties:
+        tierId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        attendees:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendeeInput"
+
+    CheckoutInput:
+      type: object
+      required: [eventId, buyerName, buyerEmail, lines]
+      properties:
+        eventId:
+          type: string
+        buyerName:
+          type: string
+        buyerEmail:
+          type: string
+          format: email
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TierLineInput"
+        promoCode:
+          type: string
+
+    CheckoutResult:
+      type: object
+      required: [free]
+      properties:
+        free:
+          type: boolean
+        orderId:
+          type: ["string", "null"]
+        url:
+          type: ["string", "null"]
+
+    EventSummary:
+      type: object
+      required: [id, title, slug, startAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        startAt:
+          type: string
+        venueName:
+          type: ["string", "null"]
+        venueAddress:
+          type: ["string", "null"]
+        virtualUrl:
+          type: ["string", "null"]
+        bannerUrl:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        endAt:
+          type: ["string", "null"]
+
+    TicketSummary:
+      type: object
+      required: [id, tierName, priceCents, attendeeName, attendeeEmail, qrToken]
+      properties:
+        id:
+          type: string
+        tierName:
+          type: string
+        priceCents:
+          type: integer
+        attendeeName:
+          type: string
+        attendeeEmail:
+          type: string
+        qrToken:
+          type: string
+
+    OrderDetail:
+      type: object
+      required: [id, status, buyerName, buyerEmail, totalCents, createdAt, tickets]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, paid, failed, cancelled]
+        buyerName:
+          type: string
+        buyerEmail:
+          type: string
+        totalCents:
+          type: integer
+        createdAt:
+          type: string
+        event:
+          $ref: "#/components/schemas/EventSummary"
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketSummary"
+
+    TicketDetail:
+      type: object
+      required: [id, tierName, priceCents, attendeeName, attendeeEmail, qrToken, orderStatus]
+      properties:
+        id:
+          type: string
+        tierName:
+          type: string
+        priceCents:
+          type: integer
+        attendeeName:
+          type: string
+        attendeeEmail:
+          type: string
+        qrToken:
+          type: string
+        orderStatus:
+          type: string
+        checkedInAt:
+          type: ["string", "null"]
+        event:
+          $ref: "#/components/schemas/EventSummary"
+
+    CheckinResult:
+      type: object
+      required: [success, checkedInAt, ticket]
+      properties:
+        success:
+          type: boolean
+        checkedInAt:
+          type: string
+        ticket:
+          $ref: "#/components/schemas/TicketDetail"
+
+    MyTicketOrder:
+      type: object
+      required: [id, status, totalCents, createdAt, event, tickets]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, paid, failed, cancelled]
+        totalCents:
+          type: integer
+        createdAt:
+          type: string
+        event:
+          $ref: "#/components/schemas/EventSummary"
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicketSummary"
+
+    EventOrdersStats:
+      type: object
+      required: [totalOrders, paidOrders, totalTickets, revenueCents]
+      properties:
+        totalOrders:
+          type: integer
+        paidOrders:
+          type: integer
+        totalTickets:
+          type: integer
+        revenueCents:
+          type: integer
+
+    EventOrderTicket:
+      type: object
+      required: [id, tierName, priceCents, attendeeName, attendeeEmail, qrToken]
+      properties:
+        id:
+          type: string
+        tierName:
+          type: string
+        priceCents:
+          type: integer
+        attendeeName:
+          type: string
+        attendeeEmail:
+          type: string
+        qrToken:
+          type: string
+        checkedInAt:
+          type: ["string", "null"]
+
+    EventOrder:
+      type: object
+      required: [id, status, buyerName, buyerEmail, totalCents, createdAt, tickets]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, paid, failed, cancelled]
+        buyerName:
+          type: string
+        buyerEmail:
+          type: string
+        totalCents:
+          type: integer
+        createdAt:
+          type: string
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventOrderTicket"
+
+    EventOrdersResponse:
+      type: object
+      required: [orders, stats]
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventOrder"
+        stats:
+          $ref: "#/components/schemas/EventOrdersStats"
+
+    RecentOrder:
+      type: object
+      required: [id, buyerName, buyerEmail, totalCents, createdAt, eventId]
+      properties:
+        id:
+          type: string
+        buyerName:
+          type: string
+        buyerEmail:
+          type: string
+        totalCents:
+          type: integer
+        createdAt:
+          type: string
+        eventId:
+          type: string
+
+    ProfileUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+
+    EventStaffMember:
+      type: object
+      required: [userId, name, email, role, assignedAt]
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        assignedAt:
+          type: string
+
+    AssignStaffInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    TierStat:
+      type: object
+      required: [tierId, name, priceCents, sold, revenueCents, checkedIn]
+      properties:
+        tierId:
+          type: string
+        name:
+          type: string
+        priceCents:
+          type: integer
+        quantity:
+          type: ["integer", "null"]
+        sold:
+          type: integer
+        revenueCents:
+          type: integer
+        checkedIn:
+          type: integer
+
+    FindTicketsTicket:
+      type: object
+      required: [id, tierName, attendeeName]
+      properties:
+        id:
+          type: string
+        tierName:
+          type: string
+        attendeeName:
+          type: string
+
+    FindTicketsEvent:
+      type: object
+      required: [title, slug, startAt]
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        startAt:
+          type: string
+        venueName:
+          type: ["string", "null"]
+
+    FindTicketsOrder:
+      type: object
+      required: [id, createdAt, totalCents, tickets]
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+        totalCents:
+          type: integer
+        event:
+          oneOf:
+            - $ref: "#/components/schemas/FindTicketsEvent"
+            - type: "null"
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/FindTicketsTicket"
+
+    PromoCode:
+      type: object
+      required: [id, eventId, code, type, value, usedCount, isActive, createdAt]
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        code:
+          type: string
+        type:
+          type: string
+          enum: [percentage, fixed]
+        value:
+          type: integer
+        maxUses:
+          type: ["integer", "null"]
+        usedCount:
+          type: integer
+        expiresAt:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+
+    PromoCodeInput:
+      type: object
+      required: [code, type, value]
+      properties:
+        code:
+          type: string
+        type:
+          type: string
+          enum: [percentage, fixed]
+        value:
+          type: integer
+        maxUses:
+          type: integer
+        expiresAt:
+          type: string
+
+    PromoCodeValidateInput:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+        totalCents:
+          type: integer
+
+    PromoCodeValidateResult:
+      type: object
+      required: [valid, discountCents, description, promoId]
+      properties:
+        valid:
+          type: boolean
+        discountCents:
+          type: integer
+        description:
+          type: string
+        promoId:
+          type: string
+
+    WaitlistInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+
+    WaitlistEntry:
+      type: object
+      required: [id, tierId, name, email, createdAt]
+      properties:
+        id:
+          type: string
+        tierId:
+          type: string
+        tierName:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        createdAt:
+          type: string
+        notifiedAt:
+          type: ["string", "null"]
+
+    EventSpeaker:
+      type: object
+      required: [id, eventId, name, createdAt]
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        name:
+          type: string
+        bio:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    EventSpeakerInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        bio:
+          type: string
+        photoUrl:
+          type: string
+
+    EventSession:
+      type: object
+      required: [id, eventId, title, startAt, endAt, sortOrder, createdAt]
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        speakerId:
+          type: ["string", "null"]
+        speaker:
+          $ref: "#/components/schemas/EventSpeaker"
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        startAt:
+          type: string
+        endAt:
+          type: string
+        roomName:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+
+    EventSessionInput:
+      type: object
+      required: [title, startAt, endAt]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        startAt:
+          type: string
+        endAt:
+          type: string
+        roomName:
+          type: string
+        speakerId:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+
+    EventAnnouncement:
+      type: object
+      required: [id, eventId, subject, body, recipientCount, sentAt]
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        recipientCount:
+          type: integer
+        sentAt:
+          type: string
+
+    SendAnnouncementInput:
+      type: object
+      required: [subject, body]
+      properties:
+        subject:
+          type: string
+          minLength: 1
+        body:
+          type: string
+          minLength: 1
+
+    OrganiserStats:
+      type: object
+      required: [totalEvents, publishedEvents, draftEvents, totalTicketsSold, totalRevenueCents, recentOrders]
+      properties:
+        totalEvents:
+          type: integer
+        publishedEvents:
+          type: integer
+        draftEvents:
+          type: integer
+        totalTicketsSold:
+          type: integer
+        totalRevenueCents:
+          type: integer
+        recentOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecentOrder"
